@@ -1,0 +1,48 @@
+//decrease thresholding by 10 on the same image to try and see what is most representative.
+sourcedir = getDirectory("Choose folder of images");
+sourcelist = getFileList(sourcedir);
+thresholddir = getDirectory("Choose folder to save stepped masks in");
+thresholdlist = getFileList(thresholddir);
+for(i=0;i<sourcelist.length;i++){
+	open(sourcedir+sourcelist[i]);
+	title = getTitle();
+	run("Split Channels");
+	selectImage(title+" (blue)");
+	close();
+	selectImage(title+" (green)");
+	channel = "green";
+	run("Gaussian Blur...", "sigma=1");
+	for(t=0;t<255;t+=10){
+		selectImage(title+" (green)");
+		mask(channel);
+		}
+	selectImage(title+" (green)");
+	close();
+	selectImage(title+" (red)");
+	channel = "red";
+	run("Gaussian Blur...", "sigma=1");
+	for(t=0;t<255;t+=10){
+		selectImage(title+" (red)");
+		mask(channel);
+		}
+	selectImage(title+" (red)");
+	close();
+	}
+function mask(channel)
+	{
+	title1= getTitle();
+	run("Threshold...");
+	setAutoThreshold("Default dark");
+	setThreshold(t, 255);
+	run("Find Maxima...", "noise=10 output=[Segmented Particles] above");
+	selectWindow(title1+" Segmented");
+	run("Analyze Particles...", "size=1-60 show=Masks add");
+	number = roiManager("count");
+	print(title1+"_"+t+","+number);
+	roiManager("reset")
+	selectWindow("Mask of "+title1+" Segmented");  
+	saveAs("Tiff", thresholddir+title+"_"+channel+t+"_mask.tif");
+	close();
+	selectWindow(title1+" Segmented");
+	close();
+	}
