@@ -2,12 +2,13 @@
 sourcedir = getDirectory("Choose folder of images");
 sourcelist = getFileList(sourcedir);
 thresholddir = getDirectory("Choose folder to save stepped masks in");
-thresholdlist = getFileList(thresholddir);
 for(i=0;i<sourcelist.length;i++){
 	open(sourcedir+sourcelist[i]);
 	title = getTitle();
 	run("Split Channels");
 	selectImage(title+" (blue)");
+	close();
+	selectImage(title+" (red)");
 	close();
 	selectImage(title+" (green)");
 	channel = "green";
@@ -16,6 +17,16 @@ for(i=0;i<sourcelist.length;i++){
 		selectImage(title+" (green)");
 		mask(channel);
 		}
+	selectImage(title+" (green)");
+	close();
+	run("Images to Stack", "name="+title+" "+channel+" title=[] use");
+	saveAs("Tiff", thresholddir+title+"_"+channel);
+	close();
+	open(sourcedir+sourcelist[i]);
+	title = getTitle();
+	run("Split Channels");
+	selectImage(title+" (blue)");
+	close();
 	selectImage(title+" (green)");
 	close();
 	selectImage(title+" (red)");
@@ -27,9 +38,17 @@ for(i=0;i<sourcelist.length;i++){
 		}
 	selectImage(title+" (red)");
 	close();
+	run("Images to Stack", "name="+title+" "+channel+" title=[] use");
+	saveAs("Tiff", thresholddir+title+"_"+channel);
+	close();
 	}
-function mask(channel)
-	{
+thresholdlist = getFileList(thresholddir);
+overlay();
+selectWindow("Log");
+saveAs("Text", thresholddir+"Threshold");
+
+
+function mask(channel) {
 	title1= getTitle();
 	run("Threshold...");
 	setAutoThreshold("Default dark");
@@ -41,8 +60,20 @@ function mask(channel)
 	print(title1+"_"+t+","+number);
 	roiManager("reset")
 	selectWindow("Mask of "+title1+" Segmented");  
-	saveAs("Tiff", thresholddir+title+"_"+channel+t+"_mask.tif");
-	close();
+	rename(title+"_"+channel+t+"_mask");
 	selectWindow(title1+" Segmented");
 	close();
 	}
+
+function overlay() {
+	for (p=0; p<thresholdlist.length;p++) {
+		open(thresholdlist[p]);
+		green = getTitle();
+		p=p+1;
+		open(thresholdlist[p]);
+		red = getTitle();
+		run("Merge Channels...", "c1="+red+" c2="+green+" create");
+		saveAs("Tiff",thresholddir+"overlay_"+green+"-"+red);
+		close();
+	}
+}
