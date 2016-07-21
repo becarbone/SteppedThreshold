@@ -1,11 +1,14 @@
 //decrease thresholding by 10 on the same image to try and see what is most representative.
+var sourcedir, punctadir, sourcelist, punctalist, gcount, rcount, punctadir, punctalist;
+var channel, title, title1, number, area, green, red, img, slice, grcount, rgcount;
+var greenrcount, redgcount;
 waitForUser("This macro needs three folders: \n-the images \n-an empty one for the puncta \n-an empty one for masks");
 sourcedir = getDirectory("Choose folder of images");
 sourcelist = getFileList(sourcedir);
 punctadir = getDirectory("Choose folder for puncta");
 punctalist = getFileList(punctadir);
 thresholddir = getDirectory("Choose folder to save processed images in");
-print("Title,threshold (non-inverted),puncta,average area");
+print("Title,threshold (non-inverted),puncta,average area,,Title,threshold (non-inverted),puncta,average area\n");
 for(i=0;i<sourcelist.length;i++){
 	open(sourcedir+sourcelist[i]);
 	title = getTitle();
@@ -13,54 +16,54 @@ for(i=0;i<sourcelist.length;i++){
 	run("Split Channels");
 	selectImage(title+" (blue)");
 	close();
-	selectImage(title+" (red)");
-	close();
 	selectImage(title+" (green)");
-	channel = "green";
 	run("Gaussian Blur...", "sigma=1");
+	selectImage(title+" (red)");
+	run("Gaussian Blur...", "sigma=1");
+	setColor("magenta");
 	for(t=0;t<255;t+=5){
+		channel = "green";
 		selectImage(title+" (green)");
 		mask(channel);
-		}
-	selectImage(title+" (green)");
-	close();
-	run("Images to Stack", "name="+title+" "+channel+" title=[] use");
-	saveAs("Tiff", thresholddir+title+"_"+channel);
-	close();
-	open(sourcedir+sourcelist[i]);
-	title = getTitle();
-	run("Properties...", "channels=1 slices=1 frames=1 unit=um pixel_width=0.1705 pixel_height=0.1705 voxel_depth=1");
-	run("Split Channels");
-	selectImage(title+" (blue)");
-	close();
-	selectImage(title+" (green)");
-	close();
-	selectImage(title+" (red)");
-	channel = "red";
-	run("Gaussian Blur...", "sigma=1");
-	for(t=0;t<255;t+=5){
+		rcount = title+"_"+channel+","+t+","+number+","+area+"\n";
+		channel = "red";
 		selectImage(title+" (red)");
 		mask(channel);
-		}
+		gcount = title+"_"+channel+","+t+","+number+","+area+",,";
+		print(gcount+rcount);
+	}
+	print("");
+	selectImage(title+" (green)");
+	close();
 	selectImage(title+" (red)");
 	close();
-	run("Images to Stack", "name="+title+" "+channel+" title=[] use");
-	saveAs("Tiff", thresholddir+title+"_"+channel);
+	selectWindow(title+"_green"+0+"_mask");
+	run("Select None");
+	setSlice(1);
+	run("Set Label...", "label="+title+"_green"+0);
+	run("Label...", "format=Label starting=0 interval=1 x=5 y=5 font=12 text=[] range=1-51 use");
+	saveAs("Tiff",thresholddir+title+"_green");
 	close();
-	}
+	selectWindow(title+"_red"+0+"_mask");
+	run("Select None");
+	setSlice(1);
+	run("Set Label...", "label="+title+"_red"+0);
+	run("Label...", "format=Label starting=0 interval=1 x=5 y=5 font=12 text=[] range=1-51 use");
+	saveAs("Tiff",thresholddir+title+"_red");
+	close();
+}
 thresholdlist = getFileList(thresholddir);
 selectWindow("Log");
-saveAs("Text", thresholddir+"Thresholding.xls");
+saveAs("Text", thresholddir+"Thresholding.csv");
 run("Close");
 print("Colocalization based on threshold");
 print("Title,threshold,colocalization");
-colocalize();
-selectWindow("Log");
-saveAs("Text", thresholddir+"Colocalization.xls");
+//colocalize();
+//selectWindow("Log");
+//saveAs("Text", thresholddir+"Colocalization.csv");
+//run("Close");
 overlay();
 waitForUser("Overlay images have to be opened in \nimageJ to see the colocalization");
-
-
 
 function mask(channel) {
 	title1= getTitle();
@@ -73,21 +76,32 @@ function mask(channel) {
 	run("Analyze Particles...", "size=1-60 show=Masks add");
 	number = roiManager("count");	
 	roiManager("Measure");
+	area = 0;
 	if( roiManager("count") > 0 )
 		{
 		roiManager("Save",punctadir+"ROI_"+title+"_"+channel+"_"+t+".zip");
 		for(j=0;j<nResults;j++)	{
 			area = area+ getResult("Area",j);
 		}
+		area = area/(nResults);
 	}
-	area = area/(nResults+1);
-	print(title1+","+t+","+number+","+area);
 	roiManager("reset");
 	selectWindow("Mask of "+title1+" Segmented");  
 	rename(title+"_"+channel+t+"_mask");
 	selectWindow(title1+" Segmented");
 	close();
+	if(t>0){
+		selectWindow(title+"_"+channel+t+"_mask");
+		run("Select All");
+		run("Copy");
+		close();
+		selectWindow(title+"_"+channel+0+"_mask");
+		run("Add Slice");
+		setSlice(nSlices);
+		run("Set Label...", "label="+title+"_"+channel+t);
+		run("Paste");
 	}
+}
 
 function overlay() {
 	for (p=0; p<thresholdlist.length;p++) {
@@ -105,16 +119,18 @@ function overlay() {
 
 function colocalize() {
 	for (i=0;i<thresholdlist.length;i++) {
+		greenrcount = newArray();
+		redgcount = newArray();
 		open(thresholddir+thresholdlist[i]);
 		title = getTitle();
 		if(endsWith(title, "_green.tif")==true) {
-			print("red ROI overlaid on green mask");
+			print("image,threshold,red ROI over green mask");
 			img = substring(title, 0, indexOf(title,"_green.tif"));
 			run("Stack to Images");
 			t=0;
 			for(s=0;s<nImages;s++) {	
 				for(x=0;x<=50;x++) {	
-					selectWindow(img+"_green"+t+"_mask");
+					selectWindow(img+"_green"+t);
 					slice = getTitle();
 					if(File.exists(punctadir+"ROI_"+img+"_red_"+t+".zip")==1) {
 						run("Clear Results");
@@ -128,27 +144,26 @@ function colocalize() {
 								rgcount++;
 							}
 						}
-					print(img+","+t+","+rgcount);
-					selectWindow(slice);
-					close();
+						selectWindow(slice);
+						close();	
 					}
 					else {
-						print(img+","+t+",0");
 						selectWindow(slice);
 						close();
 					}
+					print(img+","+t+","+rgcount);
 					t=t+5;
 				}
 			}
 		}
 		if(endsWith(title, "_red.tif")==true) {
-			print("green ROI overlaid on red mask");
+			print("image,threshold,green ROI overlaid on red mask");
 			img = substring(title, 0, indexOf(title,"_red.tif"));
 			run("Stack to Images");
 			t=0;
 			for(s=0;s<nImages;s++) {	
 				for(x=0;x<=50;x++) {	
-					selectWindow(img+"_red"+t+"_mask");
+					selectWindow(img+"_red"+t);
 					slice = getTitle();
 					if(File.exists(punctadir+"ROI_"+img+"_green_"+t+".zip")==1) {
 						run("Clear Results");
@@ -162,18 +177,19 @@ function colocalize() {
 								grcount++;
 							}
 						}
-					print(img+","+t+grcount);
-					selectWindow(slice);
-					close();
-					}
-					else {
-						print(img+","+t+",0");
 						selectWindow(slice);
 						close();
 					}
+					else {
+						selectWindow(slice);
+						close();
+					}
+					print(img+","+t+","+grcount);
 					t=t+5;
 				}
 			}
 		}
+	Array.print(redgcount);
+	Array.print(greenrcount);
 	}
 }
