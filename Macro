@@ -1,4 +1,4 @@
-//decrease thresholding by 10 on the same image to try and see what is most representative.
+//decrease thresholding by 5 on the same image to try and see what is most representative.
 var sourcedir, punctadir, sourcelist, punctalist, gcount, rcount, punctadir, punctalist;
 var channel, title, title1, number, area, green, red, img, slice, grcount, rgcount;
 var greenrcount, redgcount;
@@ -21,7 +21,7 @@ for(i=0;i<sourcelist.length;i++){
 	selectImage(title+" (red)");
 	run("Gaussian Blur...", "sigma=1");
 	setColor("magenta");
-	for(t=0;t<255;t+=5){
+	for(t=0;t<155;t+=5){
 		channel = "green";
 		selectImage(title+" (green)");
 		mask(channel);
@@ -58,10 +58,10 @@ saveAs("Text", thresholddir+"Thresholding.csv");
 run("Close");
 print("Colocalization based on threshold");
 print("Title,threshold,colocalization");
-//colocalize();
-//selectWindow("Log");
-//saveAs("Text", thresholddir+"Colocalization.csv");
-//run("Close");
+colocalize();
+selectWindow("Log");
+saveAs("Text", thresholddir+"Colocalization.csv");
+run("Close");
 overlay();
 waitForUser("Overlay images have to be opened in \nimageJ to see the colocalization");
 
@@ -129,31 +129,27 @@ function colocalize() {
 			run("Stack to Images");
 			t=0;
 			for(s=0;s<nImages;s++) {	
-				for(x=0;x<=50;x++) {	
+				for(x=0;x<=30;x++) {	
 					selectWindow(img+"_green"+t);
 					slice = getTitle();
+					rgcount=0;
 					if(File.exists(punctadir+"ROI_"+img+"_red_"+t+".zip")==1) {
 						run("Clear Results");
 						roiManager("reset");
 						roiManager("open",punctadir+"ROI_"+img+"_red_"+t+".zip");
 						selectImage(slice);
 						roiManager("Measure");
-						rgcount=0;
 						for(f=0;f<roiManager("Count");f++) {
 							if( getResult("%Area",f) >= 25 ) {
 								rgcount++;
 							}
 						}
-						selectWindow(slice);
-						close();	
-					}
-					else {
-						selectWindow(slice);
-						close();
+						
 					}
 					print(img+","+t+","+rgcount);
 					t=t+5;
 				}
+			run("Close All");
 			}
 		}
 		if(endsWith(title, "_red.tif")==true) {
@@ -162,16 +158,16 @@ function colocalize() {
 			run("Stack to Images");
 			t=0;
 			for(s=0;s<nImages;s++) {	
-				for(x=0;x<=50;x++) {	
+				for(x=0;x<=30;x++) {	
 					selectWindow(img+"_red"+t);
 					slice = getTitle();
+					grcount=0;
 					if(File.exists(punctadir+"ROI_"+img+"_green_"+t+".zip")==1) {
 						run("Clear Results");
 						roiManager("reset");
 						roiManager("open",punctadir+"ROI_"+img+"_green_"+t+".zip");
 						selectImage(slice);
 						roiManager("Measure");
-						grcount=0;
 						for(f=0;f<roiManager("Count");f++) {
 							if( getResult("%Area",f) >= 25 ) {
 								grcount++;
@@ -180,16 +176,10 @@ function colocalize() {
 						selectWindow(slice);
 						close();
 					}
-					else {
-						selectWindow(slice);
-						close();
-					}
 					print(img+","+t+","+grcount);
 					t=t+5;
 				}
-			}
+			run("Close All");
 		}
-	Array.print(redgcount);
-	Array.print(greenrcount);
 	}
 }
