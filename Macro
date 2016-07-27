@@ -8,7 +8,7 @@ sourcelist = getFileList(sourcedir);
 punctadir = getDirectory("Choose folder for puncta");
 punctalist = getFileList(punctadir);
 thresholddir = getDirectory("Choose folder to save processed images in");
-print("Title,threshold (non-inverted),puncta,average area,,Title,threshold (non-inverted),puncta,average area\n");
+print("Title,threshold (non-inverted),puncta (red),average area,,Title,threshold (non-inverted),puncta (green),average area\n");
 for(i=0;i<sourcelist.length;i++){
 	open(sourcedir+sourcelist[i]);
 	title = getTitle();
@@ -21,7 +21,7 @@ for(i=0;i<sourcelist.length;i++){
 	selectImage(title+" (red)");
 	run("Gaussian Blur...", "sigma=1");
 	setColor("magenta");
-	for(t=0;t<155;t+=5){
+	for(t=0;t<200;t+=5){
 		channel = "green";
 		selectImage(title+" (green)");
 		mask(channel);
@@ -73,7 +73,7 @@ function mask(channel) {
 	setThreshold(t, 255);
 	run("Find Maxima...", "noise=10 output=[Segmented Particles] above");
 	selectWindow(title1+" Segmented");
-	run("Analyze Particles...", "size=1-60 show=Masks add");
+	run("Analyze Particles...", "size=1-60 pixel show=Masks add");
 	number = roiManager("count");	
 	roiManager("Measure");
 	area = 0;
@@ -118,68 +118,53 @@ function overlay() {
 }
 
 function colocalize() {
+	print("image,threshold,"+notchannel+" ROI over "+channel+" mask,"+channel+" ROI over "+notchannel+" mask");
 	for (i=0;i<thresholdlist.length;i++) {
-		greenrcount = newArray();
-		redgcount = newArray();
+		channel = "green";
+		notchannel = "red";
 		open(thresholddir+thresholdlist[i]);
 		title = getTitle();
-		if(endsWith(title, "_green.tif")==true) {
-			print("image,threshold,red ROI over green mask");
-			img = substring(title, 0, indexOf(title,"_green.tif"));
-			run("Stack to Images");
-			t=0;
-			for(s=0;s<nImages;s++) {	
-				for(x=0;x<=30;x++) {	
-					selectWindow(img+"_green"+t);
-					slice = getTitle();
-					rgcount=0;
-					if(File.exists(punctadir+"ROI_"+img+"_red_"+t+".zip")==1) {
-						run("Clear Results");
-						roiManager("reset");
-						roiManager("open",punctadir+"ROI_"+img+"_red_"+t+".zip");
-						selectImage(slice);
-						roiManager("Measure");
-						for(f=0;f<roiManager("Count");f++) {
-							if( getResult("%Area",f) >= 25 ) {
+		run("Stack to Images");
+		i=i+1;
+		open(thresholddir+thresholdlist[i]);
+		run("Stack to Images");
+		img = substring(title, 0, indexOf(title,"_"+channel+".tif"));
+		t=0;
+		for(s=0;s<(nImages/2);s++) {	
+			while(t<200) {	
+				rgcount=0;
+				if(File.exists(punctadir+"ROI_"+img+"_"+notchannel+"_"+t+".zip")==1) {
+					run("Clear Results");
+					roiManager("reset");
+					roiManager("open",punctadir+"ROI_"+img+"_"+notchannel+"_"+t+".zip");
+					selectWindow(img+"_"+channel+t);
+					roiManager("Measure");
+					for(f=0;f<roiManager("Count");f++) {
+						if( getResult("%Area",f) >= 25 ) {
 								rgcount++;
 							}
 						}
-						
 					}
-					print(img+","+t+","+rgcount);
-					t=t+5;
-				}
-			run("Close All");
-			}
-		}
-		if(endsWith(title, "_red.tif")==true) {
-			print("image,threshold,green ROI overlaid on red mask");
-			img = substring(title, 0, indexOf(title,"_red.tif"));
-			run("Stack to Images");
-			t=0;
-			for(s=0;s<nImages;s++) {	
-				for(x=0;x<=30;x++) {	
-					selectWindow(img+"_red"+t);
-					slice = getTitle();
-					grcount=0;
-					if(File.exists(punctadir+"ROI_"+img+"_green_"+t+".zip")==1) {
-						run("Clear Results");
-						roiManager("reset");
-						roiManager("open",punctadir+"ROI_"+img+"_green_"+t+".zip");
-						selectImage(slice);
-						roiManager("Measure");
-						for(f=0;f<roiManager("Count");f++) {
-							if( getResult("%Area",f) >= 25 ) {
+				selectWindow(img+"_"+channel+t);
+				close();	
+				grcount=0;
+				if(File.exists(punctadir+"ROI_"+img+"_"+channel+"_"+t+".zip")==1) {
+					run("Clear Results");
+					roiManager("reset");
+					roiManager("open",punctadir+"ROI_"+img+"_"+channel+"_"+t+".zip");
+					selectWindow(img+"_"+notchannel+t);
+					roiManager("Measure");
+					for(f=0;f<roiManager("Count");f++) {
+						if( getResult("%Area",f) >= 25 ) {
 								grcount++;
 							}
 						}
-						selectWindow(slice);
-						close();
 					}
-					print(img+","+t+","+grcount);
-					t=t+5;
-				}
-			run("Close All");
+				selectWindow(img+"_"+notchannel+t);
+				close();
+				print(img+","+t+","+rgcount+","+grcount);
+				t=t+5;	
+			}
 		}
 	}
 }
