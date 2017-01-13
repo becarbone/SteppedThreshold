@@ -1,170 +1,119 @@
-//decrease thresholding by 5 on the same image to try and see what is most representative.
-var sourcedir, punctadir, sourcelist, punctalist, gcount, rcount, punctadir, punctalist;
-var channel, title, title1, number, area, green, red, img, slice, grcount, rgcount;
-var greenrcount, redgcount;
-waitForUser("This macro needs three folders: \n-the images \n-an empty one for the puncta \n-an empty one for masks");
-sourcedir = getDirectory("Choose folder of images");
+//made by Bea Carbone - 2016
+var channel, color, punctadir, sourcedir, sourcelist, thresholddir, resultsdir, nameArray;
+var ROIpunctaArray, ROIareaArray, condition, filename, title, tempTitle, shortTitle, Num, are;
+var number, area;
+//choosing the source folder w/subfolders (automatically lists names of folders in results) 
+//images should be single channel chosen ROI that were taken at 1048x1048 for appropriate sizing of puncta
+//choosing the color of the channels, mostly for labeling's sake
+waitForUser("This macro needs several folders: \n-one with the separate channel images in subfolders for conditions \n-an empty one for the puncta \n-an empty one for masks \n \n -Files need to be single channel images-");
+sourcedir = getDirectory("Choose folder for images");
 sourcelist = getFileList(sourcedir);
-punctadir = getDirectory("Choose folder for puncta");
-punctalist = getFileList(punctadir);
-thresholddir = getDirectory("Choose folder to save processed images in");
-print("Title,threshold (non-inverted),puncta (red),average area,,Title,threshold (non-inverted),puncta (green),average area\n");
-for(i=0;i<sourcelist.length;i++){
-	open(sourcedir+sourcelist[i]);
-	title = getTitle();
-	run("Properties...", "channels=1 slices=1 frames=1 unit=um pixel_width=0.1705 pixel_height=0.1705 voxel_depth=1");
-	run("Split Channels");
-	selectImage(title+" (blue)");
-	close();
-	selectImage(title+" (green)");
-	run("Gaussian Blur...", "sigma=1");
-	selectImage(title+" (red)");
-	run("Gaussian Blur...", "sigma=1");
-	setColor("magenta");
-	for(t=0;t<200;t+=5){
-		channel = "green";
-		selectImage(title+" (green)");
-		mask(channel);
-		rcount = title+"_"+channel+","+t+","+number+","+area+"\n";
-		channel = "red";
-		selectImage(title+" (red)");
-		mask(channel);
-		gcount = title+"_"+channel+","+t+","+number+","+area+",,";
-		print(gcount+rcount);
-	}
-	print("");
-	selectImage(title+" (green)");
-	close();
-	selectImage(title+" (red)");
-	close();
-	selectWindow(title+"_green"+0+"_mask");
-	run("Select None");
-	setSlice(1);
-	run("Set Label...", "label="+title+"_green"+0);
-	run("Label...", "format=Label starting=0 interval=1 x=5 y=5 font=12 text=[] range=1-51 use");
-	saveAs("Tiff",thresholddir+title+"_green");
-	close();
-	selectWindow(title+"_red"+0+"_mask");
-	run("Select None");
-	setSlice(1);
-	run("Set Label...", "label="+title+"_red"+0);
-	run("Label...", "format=Label starting=0 interval=1 x=5 y=5 font=12 text=[] range=1-51 use");
-	saveAs("Tiff",thresholddir+title+"_red");
-	close();
-}
-thresholdlist = getFileList(thresholddir);
-selectWindow("Log");
-saveAs("Text", thresholddir+"Thresholding.csv");
-run("Close");
-print("Colocalization based on threshold");
-print("Title,threshold,colocalization");
-colocalize();
-selectWindow("Log");
-saveAs("Text", thresholddir+"Colocalization.csv");
-run("Close");
-overlay();
-waitForUser("Overlay images have to be opened in \nimageJ to see the colocalization");
+Dialog.create("");
+	color = newArray("Green", "Red", "Blue", "Cyan");
+	Dialog.addChoice("Channel color", color, "Green");
+Dialog.show;
+channel = Dialog.getChoice;
 
-function mask(channel) {
-	title1= getTitle();
+
+//choosing folders for results output - the same output for all conditions to avoid needing to 
+//pull some extra menu bullshit in creating subfolders
+punctadir = getDirectory("Choose folder for "+channel+" puncta");
+thresholddir = getDirectory("Choose folder for "+channel+" masks");
+resultsdir = getDirectory("Choose folder for excel files");
+
+//Needed to list the column titles
+l = "thresholding";
+for(t=0;t<160;t+=3) {
+	l = l +"," + t;
+}
+
+nameArray = newArray();
+
+ROIareaArray = newArray(l,"");
+ROIpunctaArray = newArray(l,"");
+
+for (i=0;i<sourcelist.length; i++) {
+	condition = getFileList(sourcedir+sourcelist[i]);
+	filename = File.getName(sourcedir+sourcelist[i]);
+	ROIpunctaArray = Array.concat(ROIpunctaArray, filename);
+	ROIareaArray = Array.concat(ROIareaArray, filename);
+	Dialog.create("#coverslips");
+		slips = newArray(1,2,3,4,5,6);
+		Dialog.addChoice("# coverslips/condition", slips, 1);
+	Dialog.show;
+	coverslip = Dialog.getChoice;
+	for(d=0;d<condition.length;d++)	{
+		open(sourcedir+sourcelist[i]+condition[d]);
+		title = getTitle();
+		run("Properties...", "channels=1 slices=1 frames=1 unit=um pixel_width=0.1705 pixel_height=0.1705 voxel_depth=1");
+		run("Gaussian Blur...", "sigma=1");
+		setColor("Magenta");
+		Num = title;
+		are = title;
+		for(t=0;t<160;t+=3) {
+			selectImage(title);
+			shortTitle = substring(title, 0, lengthOf(title)-4);
+			nameArray = Array.concat(nameArray, shortTitle+"_"+t);
+			//for the definition of the mask function - see the bottom of the code
+			mask();
+			Num = Num + "," +number;
+			are = are + "," +area;
+			}
+		ROIpunctaArray = Array.concat(ROIpunctaArray, Num);
+		ROIareaArray = Array.concat(ROIareaArray, are);
+		selectImage(title);
+		close();
+		selectWindow(title+"_"+channel+0+"_mask");
+		run("Select None");
+		setSlice(1);
+		run("Label...", "format=Label starting=0 interval=1 x=5 y=5 font=8 text=[] range=1-51 use");
+		saveAs("Tiff",thresholddir+shortTitle);
+		close();
+	}
+}
+
+Array.show(channel,ROIareaArray,ROIpunctaArray);
+selectWindow(channel);
+saveAs("Results",resultsdir+channel+".csv");
+
+//Referenced functions are relegated to the end of the code
+
+function mask() {
+	tempTitle = getTitle();
 	run("Clear Results");
 	run("Threshold...");
 	setAutoThreshold("Default dark");
-	setThreshold(t, 255);
-	run("Find Maxima...", "noise=10 output=[Segmented Particles] above");
-	selectWindow(title1+" Segmented");
+	setThreshold(t,255);
+	selectWindow(tempTitle);
+	run("Find Maxima...", "noise=7.5 output=[Segmented Particles] above");
+	selectImage(tempTitle+" Segmented");
+	run("Watershed");
 	run("Analyze Particles...", "size=1-60 pixel show=Masks add");
 	number = roiManager("count");	
 	roiManager("Measure");
 	area = 0;
-	if( roiManager("count") > 0 )
-		{
-		roiManager("Save",punctadir+"ROI_"+title+"_"+channel+"_"+t+".zip");
-		for(j=0;j<nResults;j++)	{
-			area = area+ getResult("Area",j);
+	if(roiManager("count")>0) {
+		roiManager("Save",punctadir+"ROI_"+shortTitle+"_"+t+".zip");
+		for(j=0;j<nResults;j++) {
+			area = area + getResult("Area",j);
 		}
-		area = area/(nResults);
+		area = area/nResults;
 	}
 	roiManager("reset");
-	selectWindow("Mask of "+title1+" Segmented");  
+	selectImage("Mask of "+tempTitle+" Segmented"); 
 	rename(title+"_"+channel+t+"_mask");
-	selectWindow(title1+" Segmented");
+	selectImage(tempTitle+" Segmented");
 	close();
 	if(t>0){
-		selectWindow(title+"_"+channel+t+"_mask");
+		selectImage(title+"_"+channel+t+"_mask");
 		run("Select All");
 		run("Copy");
 		close();
-		selectWindow(title+"_"+channel+0+"_mask");
+		selectImage(title+"_"+channel+0+"_mask");
 		run("Add Slice");
 		setSlice(nSlices);
-		run("Set Label...", "label="+title+"_"+channel+t);
+		shortTitle = substring(title,0, lengthOf(title)-4);
+		run("Set Label...", "label="+shortTitle+"_"+t);
 		run("Paste");
-	}
-}
-
-function overlay() {
-	for (p=0; p<thresholdlist.length;p++) {
-		open(thresholddir+thresholdlist[p]);
-		coloc = 0;
-		green = getTitle();
-		p=p+1;
-		open(thresholddir+thresholdlist[p]);
-		red = getTitle();
-		run("Merge Channels...", "c1="+red+" c2="+green+" create");
-		saveAs("Tiff",thresholddir+"overlay_"+green+"-"+red);
-		close();
-	}
-}
-
-function colocalize() {
-	print("image,threshold,"+notchannel+" ROI over "+channel+" mask,"+channel+" ROI over "+notchannel+" mask");
-	for (i=0;i<thresholdlist.length;i++) {
-		channel = "green";
-		notchannel = "red";
-		open(thresholddir+thresholdlist[i]);
-		title = getTitle();
-		run("Stack to Images");
-		i=i+1;
-		open(thresholddir+thresholdlist[i]);
-		run("Stack to Images");
-		img = substring(title, 0, indexOf(title,"_"+channel+".tif"));
-		t=0;
-		for(s=0;s<(nImages/2);s++) {	
-			while(t<200) {	
-				rgcount=0;
-				if(File.exists(punctadir+"ROI_"+img+"_"+notchannel+"_"+t+".zip")==1) {
-					run("Clear Results");
-					roiManager("reset");
-					roiManager("open",punctadir+"ROI_"+img+"_"+notchannel+"_"+t+".zip");
-					selectWindow(img+"_"+channel+t);
-					roiManager("Measure");
-					for(f=0;f<roiManager("Count");f++) {
-						if( getResult("%Area",f) >= 25 ) {
-								rgcount++;
-							}
-						}
-					}
-				selectWindow(img+"_"+channel+t);
-				close();	
-				grcount=0;
-				if(File.exists(punctadir+"ROI_"+img+"_"+channel+"_"+t+".zip")==1) {
-					run("Clear Results");
-					roiManager("reset");
-					roiManager("open",punctadir+"ROI_"+img+"_"+channel+"_"+t+".zip");
-					selectWindow(img+"_"+notchannel+t);
-					roiManager("Measure");
-					for(f=0;f<roiManager("Count");f++) {
-						if( getResult("%Area",f) >= 25 ) {
-								grcount++;
-							}
-						}
-					}
-				selectWindow(img+"_"+notchannel+t);
-				close();
-				print(img+","+t+","+rgcount+","+grcount);
-				t=t+5;	
-			}
-		}
 	}
 }
